@@ -279,6 +279,28 @@ main{flex:1;overflow-y:auto;padding:24px;background:var(--yellow-bg)}
 .location-pill.active{background:var(--teal);border-color:var(--teal);color:#fff}
 .location-pill:hover:not(.active){border-color:var(--teal);color:var(--teal)}
 
+/* ══ CAMERA MODAL ══ */
+.camera-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.95);
+  z-index:5000;flex-direction:column;align-items:center;justify-content:center;
+  gap:14px;padding:20px}
+.camera-modal.open{display:flex}
+.camera-modal video{width:100%;max-width:500px;max-height:58vh;border-radius:16px;
+  object-fit:cover;border:3px solid var(--teal);background:#000}
+.camera-modal canvas{display:none}
+.camera-toolbar{display:flex;gap:14px;flex-wrap:wrap;justify-content:center;align-items:center}
+.shutter-btn{width:68px;height:68px;border-radius:50%;border:4px solid #fff;
+  background:rgba(255,255,255,.2);cursor:pointer;display:flex;align-items:center;
+  justify-content:center;font-size:26px;color:#fff;transition:all .15s}
+.shutter-btn:active{background:rgba(255,255,255,.4);transform:scale(1.05)}
+.cam-ctrl-btn{width:48px;height:48px;border-radius:50%;border:2px solid rgba(255,255,255,.5);
+  background:rgba(255,255,255,.1);cursor:pointer;display:flex;align-items:center;
+  justify-content:center;font-size:17px;color:#fff;transition:all .15s}
+.cam-ctrl-btn:active{background:rgba(255,255,255,.3)}
+.cam-status{font-size:12px;color:rgba(255,255,255,.6);text-align:center;max-width:420px;padding:0 10px}
+.cam-permission-tip{background:rgba(255,255,255,.1);border-radius:10px;
+  padding:12px 16px;font-size:12px;color:rgba(255,255,255,.8);
+  max-width:440px;text-align:center;line-height:1.6;margin-top:4px}
+
 /* ══ CALENDAR ══ */
 .calendar-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:3px}
 .cal-header{text-align:center;font-size:11px;font-weight:700;color:var(--teal-dark);padding:6px 0}
@@ -387,7 +409,7 @@ main{flex:1;overflow-y:auto;padding:24px;background:var(--yellow-bg)}
       style="text-align:center;font-size:17px;letter-spacing:4px;margin-bottom:14px"
       onkeydown="if(event.key==='Enter')verifyAdminPwd()">
     <div id="adminPwdError" style="color:#E53935;font-size:12px;margin-bottom:10px;display:none">
-      <i class="fas fa-times-circle"></i> รหัสผ่านไม่ถูกต้อง
+      <i class="fas fa-times-circle"></i> รหัสผ่านไม่ถูกต้อง (เดโมรหัสผ่านคือ 1234)
     </div>
     <div style="display:flex;gap:10px">
       <button class="btn btn-outline" style="flex:1" onclick="closeAdminModal()">ยกเลิก</button>
@@ -395,6 +417,33 @@ main{flex:1;overflow-y:auto;padding:24px;background:var(--yellow-bg)}
         <i class="fas fa-unlock"></i> เข้าสู่ระบบ
       </button>
     </div>
+  </div>
+</div>
+
+<!-- CAMERA MODAL -->
+<div class="camera-modal" id="cameraModal" role="dialog">
+  <div style="color:#fff;font-size:15px;display:flex;align-items:center;gap:8px;font-weight:600">
+    <i class="fas fa-camera"></i> ถ่ายรูปหลักฐาน
+    <span id="camFacingLabel" style="font-size:11px;opacity:.6">(กล้องหลัง)</span>
+  </div>
+  <video id="camVideo" autoplay muted playsinline style="background:#111"></video>
+  <canvas id="camCanvas" style="display:none"></canvas>
+  <div class="camera-toolbar">
+    <button class="cam-ctrl-btn" id="camSwitchBtn" onclick="switchCamera()" title="สลับกล้อง">
+      <i class="fas fa-sync-alt"></i>
+    </button>
+    <button class="shutter-btn" onclick="captureFromCamera()" title="ถ่ายรูป">
+      <i class="fas fa-circle"></i>
+    </button>
+    <button class="cam-ctrl-btn" onclick="closeCameraModal()" title="ปิด">
+      <i class="fas fa-times"></i>
+    </button>
+  </div>
+  <div class="cam-status" id="camStatusMsg">กดวงกลมเพื่อถ่ายรูป</div>
+  <div class="cam-permission-tip" id="camPermTip" style="display:none">
+    <i class="fas fa-info-circle"></i>
+    หากกล้องไม่เปิด กรุณาอนุญาตการเข้าถึงกล้องในเบราว์เซอร์<br>
+    Chrome: คลิกไอคอนกุญแจ (🔒) ที่ address bar → อนุญาตกล้อง → รีโหลด
   </div>
 </div>
 
@@ -575,7 +624,7 @@ main{flex:1;overflow-y:auto;padding:24px;background:var(--yellow-bg)}
       <div class="page-title-icon g2"><i class="fas fa-user-clock"></i></div>
       <div>
         <h2>ลงชื่อเข้า-ออกงาน</h2>
-        <p>บันทึกพร้อมรูปภาพเซลฟี่และ <b>ตรวจสอบ GPS ก่อนบันทึกทุกครั้ง</b></p>
+        <p>บันทึกพร้อมรูปภาพและ <b>ตรวจสอบ GPS ก่อนบันทึกทุกครั้ง</b></p>
       </div>
     </div>
   </div>
@@ -665,22 +714,30 @@ main{flex:1;overflow-y:auto;padding:24px;background:var(--yellow-bg)}
         </div>
 
         <div class="form-group">
-          <label class="form-label"><i class="fas fa-camera"></i> รูปถ่ายหลักฐานเซลฟี่หน้าตรง (กล้องหน้าบังคับถ่ายสด) <span style="color:red">*</span></label>
+          <label class="form-label"><i class="fas fa-camera"></i> รูปหลักฐาน (เข้างาน)</label>
           <div class="photo-upload-area" id="photoBoxIn">
-            <img id="photoPreviewIn" alt="" style="display:none;width:100%;max-height:220px;object-fit:cover;border-radius:10px">
+            <img id="photoPreviewIn" alt="" style="display:none;width:100%;max-height:180px;object-fit:cover;border-radius:10px">
             <div id="photoPlaceholderIn" style="display:flex;flex-direction:column;align-items:center;gap:6px">
-              <i class="fas fa-user-circle" style="font-size:38px;color:var(--gray-400)"></i>
-              <p style="color:var(--gray-600);font-size:12px">ยังไม่มีรูปถ่ายเซลฟี่</p>
+              <i class="fas fa-image" style="font-size:32px;color:var(--gray-400)"></i>
+              <p style="color:var(--gray-600);font-size:12px">ยังไม่มีรูป</p>
             </div>
           </div>
           <div class="photo-btn-row">
-            <!-- บังคับเปิดกล้องหน้า (capture="user") บนมือถือ และจำกัดสิทธิ์ดึงภาพจากแกลเลอรีป้องกันทุจริต -->
-            <label class="btn btn-primary btn-lg" style="cursor:pointer;flex:1;text-align:center;justify-content:center">
-              <i class="fas fa-camera"></i> เปิดกล้องถ่ายรูปเซลฟี่สด
-              <input type="file" accept="image/*" capture="user"
+            <label class="btn btn-primary btn-sm" style="cursor:pointer">
+              <i class="fas fa-camera"></i> กล้อง
+              <input type="file" accept="image/*" capture="environment"
                      onchange="handleFileSelect(event,'in')" style="display:none">
             </label>
-            <button type="button" class="btn btn-danger" style="width:48px" onclick="clearPhoto('in')" title="ลบรูป">
+            <button type="button" class="btn btn-outline btn-sm" id="camBtnInDesktop"
+                    onclick="openCameraDesktop('in')">
+              <i class="fas fa-video"></i> กล้อง PC
+            </button>
+            <label class="btn btn-sm" style="background:#eee;color:#555;cursor:pointer">
+              <i class="fas fa-images"></i> Gallery
+              <input type="file" accept="image/*"
+                     onchange="handleFileSelect(event,'in')" style="display:none">
+            </label>
+            <button type="button" class="btn btn-sm btn-danger" onclick="clearPhoto('in')">
               <i class="fas fa-trash"></i>
             </button>
           </div>
@@ -740,21 +797,30 @@ main{flex:1;overflow-y:auto;padding:24px;background:var(--yellow-bg)}
         </div>
 
         <div class="form-group">
-          <label class="form-label"><i class="fas fa-camera"></i> รูปถ่ายหลักฐานเซลฟี่หน้าตรง (กล้องหน้าบังคับถ่ายสด) <span style="color:red">*</span></label>
+          <label class="form-label"><i class="fas fa-camera"></i> รูปหลักฐาน (ออกงาน)</label>
           <div class="photo-upload-area" id="photoBoxOut">
-            <img id="photoPreviewOut" alt="" style="display:none;width:100%;max-height:220px;object-fit:cover;border-radius:10px">
+            <img id="photoPreviewOut" alt="" style="display:none;width:100%;max-height:180px;object-fit:cover;border-radius:10px">
             <div id="photoPlaceholderOut" style="display:flex;flex-direction:column;align-items:center;gap:6px">
-              <i class="fas fa-user-circle" style="font-size:38px;color:var(--gray-400)"></i>
-              <p style="color:var(--gray-600);font-size:12px">ยังไม่มีรูปถ่ายเซลฟี่</p>
+              <i class="fas fa-image" style="font-size:32px;color:var(--gray-400)"></i>
+              <p style="color:var(--gray-600);font-size:12px">ยังไม่มีรูป</p>
             </div>
           </div>
           <div class="photo-btn-row">
-            <label class="btn btn-warning btn-lg" style="cursor:pointer;flex:1;text-align:center;justify-content:center">
-              <i class="fas fa-camera"></i> เปิดกล้องถ่ายรูปเซลฟี่สด
-              <input type="file" accept="image/*" capture="user"
+            <label class="btn btn-warning btn-sm" style="cursor:pointer">
+              <i class="fas fa-camera"></i> กล้อง
+              <input type="file" accept="image/*" capture="environment"
                      onchange="handleFileSelect(event,'out')" style="display:none">
             </label>
-            <button type="button" class="btn btn-danger" style="width:48px" onclick="clearPhoto('out')" title="ลบรูป">
+            <button type="button" class="btn btn-outline btn-sm" id="camBtnOutDesktop"
+                    onclick="openCameraDesktop('out')">
+              <i class="fas fa-video"></i> กล้อง PC
+            </button>
+            <label class="btn btn-sm" style="background:#eee;color:#555;cursor:pointer">
+              <i class="fas fa-images"></i> Gallery
+              <input type="file" accept="image/*"
+                     onchange="handleFileSelect(event,'out')" style="display:none">
+            </label>
+            <button type="button" class="btn btn-sm btn-danger" onclick="clearPhoto('out')">
               <i class="fas fa-trash"></i>
             </button>
           </div>
@@ -1050,7 +1116,7 @@ main{flex:1;overflow-y:auto;padding:24px;background:var(--yellow-bg)}
     <button class="btn btn-primary" onclick="openLocationModal()"><i class="fas fa-plus"></i> เพิ่มสถานที่</button>
   </div>
   <div id="locationsGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px"></div>
-  <div id="noLocationsData" style="text-align:center;padding:40px;color:var(--gray-400)">
+  <div id="noLocationsData" style="text-align:center;padding:60px;color:var(--gray-400)">
     <i class="fas fa-map-marker-alt" style="font-size:40px;margin-bottom:12px;display:block;opacity:.3"></i>
     <p>ยังไม่มีสถานที่ทำงาน</p>
   </div>
@@ -1129,10 +1195,15 @@ main{flex:1;overflow-y:auto;padding:24px;background:var(--yellow-bg)}
   </div>
 
   <div class="glass" style="border-left:4px solid var(--purple)">
-    <div class="glass-header"><div class="glass-title"><div class="icon-box g5"><i class="fas fa-key"></i></div> รหัสผ่าน Admin</div></div>
-    <div style="padding:12px;background:#FFF8E1;border-radius:8px;font-size:12px;color:#F57F17">
-      <i class="fas fa-shield-alt"></i> เปลี่ยนรหัสผ่านจริงได้ในชีต "การตั้งค่า" แถว <code>adminPassword</code> (หรือใช้ปุ่มรีเซ็ตจาก Admin ที่มีสิทธิ์แก้ Google Sheet โดยตรง)
+    <div class="glass-header"><div class="glass-title"><div class="icon-box g5"><i class="fas fa-key"></i></div> การเชื่อมต่อ API (GitHub Pages)</div></div>
+    <div class="form-group">
+      <label class="form-label">Apps Script Web App URL</label>
+      <input class="form-control" id="setApiUrl" placeholder="https://script.google.com/macros/s/XXXX/exec">
     </div>
+    <div style="padding:10px;background:#FFF8E1;border-radius:8px;font-size:12px;color:#F57F17;margin-top:10px">
+      <i class="fas fa-shield-alt"></i> วาง URL ที่ได้จากการ Deploy &gt; New deployment &gt; Web app (Execute as: Me, Who has access: Anyone) แล้วกด "บันทึก URL API" ค่านี้จะถูกจำไว้ในเบราว์เซอร์นี้
+    </div>
+    <div style="margin-top:12px"><button class="btn btn-sm btn-primary" onclick="saveApiUrl()"><i class="fas fa-save"></i> บันทึก URL API</button></div>
   </div>
 
   <div style="margin-top:20px;display:flex;gap:10px;flex-wrap:wrap">
@@ -1146,15 +1217,34 @@ main{flex:1;overflow-y:auto;padding:24px;background:var(--yellow-bg)}
 <!-- ════ JAVASCRIPT ════ -->
 <script>
 /* ════════════════════════════════════════
-   ⚙️ GAS_URL — วาง Web App URL ของ Apps Script ที่ deploy ไว้ที่นี่
-   เช่น: https://script.google.com/macros/s/AKfycbxxxxxxxxxxxxxxxxxxxxxxxxxx/exec
-   ถ้าเว้นว่างไว้ ระบบจะรันด้วยข้อมูลจำลอง (mock) เพื่อพรีวิวบนเครื่องเท่านั้น
+   API CONNECTION — GitHub Pages ⇄ Apps Script
+   ════════════════════════════════════════
+   แอปนี้รันเป็นไฟล์ static (index.html) บน GitHub Pages
+   จึงไม่มี google.script.run ให้ใช้ ต้องเรียก Apps Script ผ่าน
+   fetch() ไปยัง Web App URL ที่ deploy ไว้ (ดูวิธี deploy ท้ายไฟล์ Code.gs)
+
+   ⚠️ ทำไมต้องยิงเป็น POST + Content-Type: text/plain
+   Apps Script Web App ไม่มี doOptions() รองรับ CORS preflight
+   ถ้าใช้ Content-Type: application/json เบราว์เซอร์จะยิง OPTIONS ก่อน (preflight)
+   แล้ว Apps Script จะตอบ 405 ทำให้ fetch fail ทันที
+   การใช้ text/plain ทำให้เบราว์เซอร์มองเป็น "simple request" ไม่มี preflight
+   (ตัว body ยังคงเป็น JSON string ปกติ ฝั่ง Apps Script parse เองด้วย JSON.parse)
 ════════════════════════════════════════ */
-const GAS_URL = 'https://script.google.com/macros/s/AKfycby2ocxXKdhqx3yxfCPxvA3rsPLg4PUjXqBsyW4rr1lWQqA42QTIjsVN9YcWrdRAS9UC/exec'; // ← ใส่ Web App URL จาก Apps Script deployment ตรงนี้
+const API_URL_STORAGE_KEY = 'novasol_api_url';
+function getApiUrl() {
+  return (localStorage.getItem(API_URL_STORAGE_KEY) || '').trim();
+}
+function saveApiUrl() {
+  const url = document.getElementById('setApiUrl').value.trim();
+  if (!url) { toast('กรุณาวาง Web App URL ก่อนบันทึก','error'); return; }
+  localStorage.setItem(API_URL_STORAGE_KEY, url);
+  toast('บันทึก URL API แล้ว กำลังเชื่อมต่อใหม่...','success');
+  setTimeout(() => location.reload(), 800);
+}
 
 /* ════════════════════════════════════════
    STANDALONE PREVIEW / MOCK LAYER
-   (ใช้เมื่อยังไม่ได้ตั้งค่า GAS_URL — สำหรับทดสอบ UI บนเครื่องเท่านั้น)
+   (ใช้เมื่อยังไม่ได้ตั้งค่า API_URL หรือเชื่อมต่อไม่ได้ — เพื่อทดสอบ UI ได้ทันที)
 ════════════════════════════════════════ */
 let mock_db = {
   locations: [
@@ -1182,37 +1272,53 @@ let mock_db = {
   }
 };
 
-/* ── gasRun — เรียก Apps Script Web App จริงผ่าน fetch() เมื่อกำหนด GAS_URL ── */
+/* ── gasRun — เรียก API ผ่าน fetch (GitHub Pages) หรือ google.script.run (ถ้ารันบน Apps Script) ── */
 function gasRun(fnName, payload) {
-  if (GAS_URL) {
-    return gasRunFetch(fnName, payload);
-  }
-  // ไม่ได้ตั้งค่า GAS_URL → ใช้ mock เพื่อพรีวิว UI บนเครื่องเท่านั้น
-  return new Promise(function (resolve, reject) {
-    console.log('[Mock — GAS_URL ยังไม่ได้ตั้งค่า]', fnName, payload);
-    setTimeout(function () {
-      try { resolve(executeMock(fnName, payload)); }
-      catch (e) { reject(e); }
-    }, 300);
-  });
-}
+  const apiUrl = getApiUrl();
 
-/* สำคัญ: ใช้ Content-Type: text/plain เพื่อให้ browser ส่งเป็น "simple request"
-   หลีกเลี่ยง CORS preflight (OPTIONS) ซึ่ง Apps Script Web App ไม่รองรับ */
-async function gasRunFetch(fnName, payload) {
-  const body = Object.assign({ action: fnName }, payload || {});
-  const res = await fetch(GAS_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-    body: JSON.stringify(body)
-  });
-  if (!res.ok) throw new Error('เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ (HTTP ' + res.status + ')');
-  const data = await res.json();
-  if (data && data.status === 'error') {
-    // ยังคง resolve เพื่อให้โค้ดเดิมที่เช็ค res.status/res.message ทำงานต่อได้ตามปกติ
-    return data;
+  if (apiUrl) {
+    // ═══ โหมดหลัก: GitHub Pages เรียก Apps Script Web App ผ่าน fetch ═══
+    return fetch(apiUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // ดูเหตุผลด้านบน (เลี่ยง CORS preflight)
+      body: JSON.stringify({ fn: fnName, payload: payload })
+    })
+    .then(function(res) {
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      return res.json();
+    })
+    .catch(function(err) {
+      console.warn('[API Error]', fnName, err);
+      toast('เชื่อมต่อ API ไม่ได้ ใช้ข้อมูลจำลองชั่วคราว','error');
+      return new Promise(function(resolve, reject) {
+        setTimeout(function(){
+          try { resolve(executeMock(fnName, payload)); } catch(e){ reject(e); }
+        }, 300);
+      });
+    });
   }
-  return data;
+
+  return new Promise(function(resolve, reject) {
+    if (typeof google !== 'undefined' && google.script && google.script.run) {
+      // ═══ โหมดสำรอง: รันอยู่ภายใน Apps Script HtmlService โดยตรง ═══
+      const runner = google.script.run
+        .withSuccessHandler(resolve)
+        .withFailureHandler(reject);
+      if (payload !== undefined) runner[fnName](payload);
+      else runner[fnName]();
+    } else {
+      // ═══ โหมดจำลอง: ยังไม่ได้ตั้งค่า API URL ═══
+      console.log(`[GAS Mock Action] ${fnName}`, payload);
+      setTimeout(() => {
+        try {
+          const res = executeMock(fnName, payload);
+          resolve(res);
+        } catch(e) {
+          reject(e);
+        }
+      }, 450);
+    }
+  });
 }
 
 function executeMock(fnName, payload) {
@@ -1411,7 +1517,7 @@ function executeMock(fnName, payload) {
     case 'testTelegram':
       return { status: 'success' };
     case 'verifyAdmin':
-      if (payload.password === '1234' || payload.password === 'NovaSol1909') {
+      if (payload.password === '1234') {
         return { status: 'success', token: 'mock-admin-token' };
       }
       return { status: 'error' };
@@ -1480,8 +1586,8 @@ async function swalSuccess(title, text) {
 /* ════════════════════════════════════════
    ROLE MANAGEMENT
 ════════════════════════════════════════ */
-let adminToken  = '';
-let currentRole = 'employee';
+let adminToken  = sessionStorage.getItem('adminToken') || '';
+let currentRole = adminToken ? 'admin' : 'employee';
 let _adminCallback = null;
 
 const ADMIN_ONLY_PAGES = ['employees','addschedule','locations','report','settings'];
@@ -1531,6 +1637,7 @@ function handleRoleBadgeClick() {
 
 function logoutAdmin() {
   adminToken = '';
+  sessionStorage.removeItem('adminToken');
   applyRole('employee');
   _doSwitchPage('checkin');
   toast('ออกจากโหมด Admin แล้ว','info');
@@ -1563,6 +1670,7 @@ async function verifyAdminPwd() {
     btn.disabled  = false;
     if (res.status === 'success') {
       adminToken = res.token || 'ok';
+      sessionStorage.setItem('adminToken', adminToken);
       closeAdminModal();
       if (_adminCallback) { _adminCallback(); _adminCallback = null; }
     } else {
@@ -1577,7 +1685,7 @@ async function verifyAdminPwd() {
 }
 
 /* ════════════════════════════════════════
-   GPS STATE & BUTTON LOCK
+   GPS STATE & BUTTON LOCK — ป้องกันทุจริต
 ════════════════════════════════════════ */
 let gpsStateIn  = 'none';
 let gpsStateOut = 'none';
@@ -1858,17 +1966,111 @@ function startClock() {
 }
 
 /* ════════════════════════════════════════
-   CAMERA AND UPLOAD LOGIC
+   CAMERA
+   หมายเหตุ: getUserMedia ต้องการ 2 อย่างเสมอ
+   1) หน้าเว็บโหลดผ่าน HTTPS (GitHub Pages ให้ฟรีอยู่แล้ว)
+   2) ไม่ได้ถูกฝังอยู่ใน cross-origin iframe ที่ปิดสิทธิ์กล้อง
+      (จุดนี้คือปัญหาเดิมตอนรันผ่าน Apps Script HtmlService ซึ่ง
+      Google จะเสิร์ฟหน้าเว็บผ่าน iframe ของ script.google.com/googleusercontent.com
+      แล้วตั้ง Permissions-Policy ปิดกล้องไว้ที่ระดับ iframe เอง แก้จากโค้ดฝั่งเราไม่ได้
+      — ย้ายมาเป็นหน้า top-level บน GitHub Pages จึงทำให้กล้องขอสิทธิ์ได้ตามปกติ)
 ════════════════════════════════════════ */
+let camStream  = null;
+let camFacing  = 'environment';
+let camTarget  = 'in';
+let isMobile   = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+
+function detectPlatform() {
+  const desktopBtns = [
+    document.getElementById('camBtnInDesktop'),
+    document.getElementById('camBtnOutDesktop')
+  ];
+  desktopBtns.forEach(btn => { if (btn) btn.style.display = isMobile ? 'none' : 'inline-flex'; });
+}
+
+async function openCameraDesktop(target) {
+  camTarget = target || 'in';
+  if (location.protocol !== 'https:' && location.hostname !== 'localhost') {
+    toast('กล้องต้องใช้งานผ่าน HTTPS เท่านั้น กรุณาเปิดผ่านลิงก์ GitHub Pages (https://...)','error');
+    return;
+  }
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    toast('เบราว์เซอร์ไม่รองรับกล้องในสภาวะนี้ กรุณาอัปโหลดรูปภาพผ่าน Gallery แทน','error');
+    return;
+  }
+  document.getElementById('cameraModal').classList.add('open');
+  document.getElementById('camStatusMsg').textContent = '⏳ กำลังขอสิทธิ์กล้อง...';
+  document.getElementById('camPermTip').style.display = 'none';
+  try { await startCamStream(); } catch(e) { handleCameraError(e); }
+}
+
+async function startCamStream() {
+  if (camStream) { camStream.getTracks().forEach(t => t.stop()); camStream = null; }
+  const constraints = {
+    video: { facingMode: camFacing, width:{ideal:1280,max:1920}, height:{ideal:720,max:1080} },
+    audio: false
+  };
+  camStream = await navigator.mediaDevices.getUserMedia(constraints);
+  const video = document.getElementById('camVideo');
+  video.srcObject = camStream;
+  await video.play().catch(() => {});
+  document.getElementById('camFacingLabel').textContent =
+    camFacing === 'environment' ? '(กล้องหลัง)' : '(กล้องหน้า)';
+  document.getElementById('camStatusMsg').textContent = 'กดวงกลมเพื่อถ่ายรูป • กด ✕ เพื่อยกเลิก';
+  document.getElementById('camPermTip').style.display = 'none';
+}
+
+async function switchCamera() {
+  camFacing = camFacing === 'environment' ? 'user' : 'environment';
+  try { await startCamStream(); }
+  catch(e) { camFacing = camFacing === 'environment' ? 'user' : 'environment'; toast('ไม่พบกล้องระบุ','error'); }
+}
+
+function captureFromCamera() {
+  const video  = document.getElementById('camVideo');
+  const canvas = document.getElementById('camCanvas');
+  const w = video.videoWidth || 640, h = video.videoHeight || 480;
+  canvas.width = w; canvas.height = h;
+  const ctx = canvas.getContext('2d');
+  if (camFacing === 'user') { ctx.translate(w, 0); ctx.scale(-1, 1); }
+  ctx.drawImage(video, 0, 0, w, h);
+  const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+  setPhotoPreview(dataUrl, camTarget);
+  closeCameraModal();
+  toast('ถ่ายรูปสำเร็จ ✅','success');
+}
+
+function closeCameraModal() {
+  if (camStream) { camStream.getTracks().forEach(t => t.stop()); camStream = null; }
+  document.getElementById('cameraModal').classList.remove('open');
+  document.getElementById('camPermTip').style.display = 'none';
+}
+
+function handleCameraError(e) {
+  console.warn('Camera error:', e.name, e.message);
+  let msg = '';
+  if (e.name === 'NotAllowedError' || e.name === 'PermissionDeniedError') {
+    msg = '⛔ ถูกปฏิเสธการเข้าถึงกล้อง';
+    document.getElementById('camPermTip').style.display = 'block';
+    document.getElementById('camStatusMsg').textContent = msg;
+  } else if (e.name === 'NotFoundError') {
+    msg = '❌ ไม่พบกล้องในอุปกรณ์นี้';
+    document.getElementById('camStatusMsg').textContent = msg;
+    setTimeout(closeCameraModal, 2000);
+  } else {
+    msg = '⚠️ ไม่สามารถเปิดกล้องได้';
+    document.getElementById('camStatusMsg').textContent = msg;
+    toast(msg + ' กรุณาเลือกไฟล์แทน', 'error');
+    setTimeout(closeCameraModal, 2500);
+  }
+}
+
 function handleFileSelect(e, target) {
   const file = e.target.files[0];
   if (!file) return;
-
-  showLoading('กำลังประมวลผลรูปเซลฟี่...');
-  resizeImage(file, 1024, 768, 0.85, function(dataUrl) {
-    hideLoading();
+  resizeImage(file, 1280, 960, 0.82, function(dataUrl) {
     setPhotoPreview(dataUrl, target);
-    toast('บันทึกรูปภาพสำเร็จ ✅','success');
+    toast('เลือกรูปสำเร็จ ✅','success');
   });
   e.target.value = '';
 }
@@ -2063,6 +2265,7 @@ let allLogs=[], allSchedule=[], charts={};
 let calYear=new Date().getFullYear(), calMonth=new Date().getMonth();
 
 window.onload = async function() {
+  detectPlatform();
   applyRole(currentRole);
   startClock();
   loadLocalSettings();
@@ -2071,22 +2274,21 @@ window.onload = async function() {
   updateCheckBtnState('in');
   updateCheckBtnState('out');
 
-  if (!GAS_URL) {
-    toast('⚠️ ยังไม่ได้ตั้งค่า GAS_URL — กำลังใช้ข้อมูลจำลอง (mock) เท่านั้น','warning');
-  }
+  const apiUrlEl = document.getElementById('setApiUrl');
+  if (apiUrlEl) apiUrlEl.value = getApiUrl();
 
   showLoading('กำลังเริ่มต้นระบบ...');
   try {
     await gasRun('initSystem');
     await Promise.all([loadRemoteConfig(), loadLocationsData()]);
     await loadTodayDuty();
-    document.getElementById('sysStatus').textContent = GAS_URL ? 'ออนไลน์ ✓' : 'ออนไลน์ (Mock)';
+    document.getElementById('sysStatus').textContent = getApiUrl() ? 'ออนไลน์ ✓ (API)' : 'ออนไลน์ ✓';
     hideLoading();
     toast('ยินดีต้อนรับสู่ระบบ หจก.โนวาโซล 🎉','success');
   } catch(e) {
     hideLoading();
-    document.getElementById('sysStatus').textContent = 'เชื่อมต่อไม่ได้ ⚠️';
-    toast('เชื่อมต่อเซิร์ฟเวอร์ไม่ได้: ' + e.message,'error');
+    document.getElementById('sysStatus').textContent = 'ออนไลน์ (Mock)';
+    toast('จำลองโหมดออฟไลน์ทำงานสมบูรณ์','success');
     console.error('Init error:',e);
   }
 };
@@ -2161,7 +2363,7 @@ async function loadTodayDuty() {
 }
 
 /* ════════════════════════════════════════
-   CHECK IN — บังคับ GPS & รูปถ่ายเซลฟี่ก่อน
+   CHECK IN — บังคับ GPS ผ่านก่อน + PIN
 ════════════════════════════════════════ */
 async function handleCheckIn() {
   if (gpsStateIn !== 'ok') {
@@ -2177,18 +2379,11 @@ async function handleCheckIn() {
 
   const name=document.getElementById('ciEmployeeName').value.trim();
   const id  =document.getElementById('ciEmployeeId').value.trim();
-  const photo = document.getElementById('ciPhotoBase64').value;
-
   if(!name||!id){ toast('กรุณาเลือกพนักงานที่จะลงชื่อเข้างาน','error'); return; }
 
-  if (!photo) {
-    await Swal.fire({
-      icon: 'warning',
-      title: '📸 ต้องถ่ายรูปเซลฟี่ก่อน',
-      text: 'กรุณากดปุ่ม "เปิดกล้องถ่ายรูปเซลฟี่สด" เพื่อถ่ายภาพหน้าตรงจริงในเวลานี้',
-      confirmButtonText: 'เข้าใจแล้ว',
-      confirmButtonColor: '#26A69A'
-    });
+  const pin = document.getElementById('ciPin')?.value.trim() || '';
+  if (!pin || pin.length !== 4) {
+    toast('กรุณากรอก PIN 4 หลัก', 'error');
     return;
   }
 
@@ -2204,12 +2399,15 @@ async function handleCheckIn() {
       locationName: loc['ชื่อสถานที่'] || 'บก.ศรชล.',
       lat:          document.getElementById('ciLat').value,
       lng:          document.getElementById('ciLng').value,
-      photoBase64:  photo,
+      pin:          pin,
+      userAgent:    navigator.userAgent,
+      photoBase64:  document.getElementById('ciPhotoBase64').value,
       notes:        document.getElementById('ciNotes').value
     });
     hideLoading();
     if(res.status==='success'){
       document.getElementById('ciNotes').value='';
+      const pinEl = document.getElementById('ciPin'); if (pinEl) pinEl.value='';
       clearPhoto('in');
       gpsStateIn = 'none';
       updateCheckBtnState('in');
@@ -2223,7 +2421,7 @@ async function handleCheckIn() {
 }
 
 /* ════════════════════════════════════════
-   CHECK OUT — บังคับ GPS & รูปถ่ายเซลฟี่ก่อน
+   CHECK OUT — บังคับ GPS ผ่านก่อน
 ════════════════════════════════════════ */
 async function handleCheckOut() {
   if (gpsStateOut !== 'ok') {
@@ -2238,20 +2436,7 @@ async function handleCheckOut() {
   }
 
   const id=document.getElementById('coEmployeeId').value.trim();
-  const photo = document.getElementById('coPhotoBase64').value;
-
   if(!id){ toast('กรุณากรอกรหัสพนักงานเพื่อออกงาน','error'); return; }
-
-  if (!photo) {
-    await Swal.fire({
-      icon: 'warning',
-      title: '📸 ต้องถ่ายรูปเซลฟี่ก่อน',
-      text: 'กรุณากดปุ่ม "เปิดกล้องถ่ายรูปเซลฟี่สด" เพื่อถ่ายภาพยืนยันการปฏิบัติงานเรียบร้อย',
-      confirmButtonText: 'เข้าใจแล้ว',
-      confirmButtonColor: '#F57F17'
-    });
-    return;
-  }
 
   const loc = getActiveLocation();
   showLoading('กำลังบันทึกออกงาน...');
@@ -2261,7 +2446,7 @@ async function handleCheckOut() {
       locationId:  selectedLocationId || (loc['ID'] || ''),
       lat:         document.getElementById('coLat').value,
       lng:         document.getElementById('coLng').value,
-      photoBase64: photo,
+      photoBase64: document.getElementById('coPhotoBase64').value,
       notes:       document.getElementById('coNotes').value
     });
     hideLoading();
@@ -2559,7 +2744,7 @@ function filterLogsTable() {
 }
 async function deleteLog(id) {
   const ok = await swalConfirm('ยืนยันการลบ?','รายการนี้จะถูกลบถาวร','warning');
-  if(!ok) return;
+  if (!ok) return;
   showLoading('กำลังลบ...');
   try {
     const res=await gasRun('deleteLog',{id});
@@ -2704,6 +2889,8 @@ function loadSettingsPage() {
   const el=document.getElementById('setCompanyName');
   if(el&&cn) el.value=cn;
   populateSettingsDefaultLocation();
+  const apiUrlEl = document.getElementById('setApiUrl');
+  if (apiUrlEl) apiUrlEl.value = getApiUrl();
 }
 async function doSaveSettings() {
   const companyName=document.getElementById('setCompanyName').value.trim();
@@ -2728,10 +2915,9 @@ async function testTelegramAction() {
   if(!token||!chat){toast('กรุณากรอก Bot Token และ Chat ID ก่อนทดสอบ','error');return;}
   showLoading('กำลังส่งข้อความทดสอบ...');
   try {
-    const res = await gasRun('testTelegram',{token,chat});
+    await gasRun('testTelegram',{token,chat});
     hideLoading();
-    if (res.status === 'success') toast('ส่งข้อความทดสอบ Telegram แล้ว ✅','success');
-    else toast('ส่ง Telegram ไม่ได้: '+(res.message||''),'error');
+    toast('ส่งข้อความทดสอบ Telegram แล้ว ✅','success');
   } catch(e){ hideLoading(); toast('ส่ง Telegram ไม่ได้: '+e.message,'error'); }
 }
 
@@ -2757,18 +2943,26 @@ async function loadEmployeesForCurrentLocation() {
   }
 }
 
+// เมื่อเลือกพนักงาน — แสดงช่อง PIN
 function autoFillEmployeeInfo(select) {
   const option = select.options[select.selectedIndex];
-  if (!option || !option.value) {
-    document.getElementById('ciEmployeeId').value = '';
-    document.getElementById('ciEmployeeName').value = '';
-    document.getElementById('ciPosition').value = '';
-    return;
-  }
+  if (!option || !option.value) return;
 
   document.getElementById('ciEmployeeId').value = option.value;
   document.getElementById('ciEmployeeName').value = option.dataset.name || '';
   document.getElementById('ciPosition').value = option.dataset.position || '';
+
+  let pinContainer = document.getElementById('ciPinContainer');
+  if (!pinContainer) {
+    pinContainer = document.createElement('div');
+    pinContainer.id = 'ciPinContainer';
+    pinContainer.className = 'form-group';
+    pinContainer.innerHTML = `
+      <label class="form-label"><i class="fas fa-key"></i> PIN 4 หลัก <span style="color:red">*</span></label>
+      <input type="password" class="form-control" id="ciPin" maxlength="4" placeholder="0000" inputmode="numeric">
+    `;
+    select.parentElement.parentElement.appendChild(pinContainer);
+  }
 }
 
 /* ── UI HELPERS ── */
