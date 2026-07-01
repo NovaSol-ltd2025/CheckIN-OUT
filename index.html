@@ -1030,6 +1030,10 @@ main{flex:1;overflow-y:auto;padding:24px;background:var(--yellow-bg)}
       <div class="form-group"><label class="form-label">อีเมล</label><input class="form-control" id="empEmail"></div>
       <div class="form-group"><label class="form-label">Line ID</label><input class="form-control" id="empLine"></div>
       <div class="form-group"><label class="form-label">Telegram</label><input class="form-control" id="empTelegram" placeholder="@username"></div>
+      <div class="form-group">
+        <label class="form-label"><i class="fas fa-key"></i> PIN 4 หลัก (สำหรับเข้างาน)</label>
+        <input class="form-control" id="empPin" maxlength="4" inputmode="numeric" placeholder="เว้นว่างเพื่อสุ่มอัตโนมัติ">
+      </div>
     </div>
     <div style="margin-top:14px"><button class="btn btn-primary" onclick="saveEmployee()"><i class="fas fa-save"></i> บันทึก</button></div>
   </div>
@@ -1399,16 +1403,18 @@ function executeMock(fnName, payload) {
       mock_db.locations = mock_db.locations.filter(l => l.ID !== payload.id);
       return { status: 'success' };
     case 'addEmployee':
+      const genPin = payload.pin || ('0000' + Math.floor(Math.random()*10000)).slice(-4);
       const newEmp = {
         'รหัสพนักงาน': payload.employeeId,
         'ชื่อ-นามสกุล': payload.name,
         'ตำแหน่ง': payload.position,
         'แผนก': payload.department,
         'โทรศัพท์': payload.phone,
+        'PIN': genPin,
         'สถานะ': 'ปกติ'
       };
       mock_db.employees.push(newEmp);
-      return { status: 'success' };
+      return { status: 'success', pin: genPin };
     case 'addSchedule':
       payload.entries.forEach(entry => {
         mock_db.schedule.push({
@@ -1438,6 +1444,12 @@ function executeMock(fnName, payload) {
       const todayDate = todayStr();
       const existingLogIdx = mock_db.logs.findIndex(l => l['รหัสพนักงาน'] === payload.employeeId && l['วันที่'] === todayDate);
       const curTime = new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', hour12: false });
+
+      // ── โหมดจำลอง: ตรวจสอบ PIN ด้วย (ให้ตรงพฤติกรรมกับฝั่ง Apps Script จริง) ──
+      const mockEmp = mock_db.employees.find(e => e['รหัสพนักงาน'] === payload.employeeId);
+      if (!mockEmp || String(mockEmp['PIN'] || '') !== String(payload.pin || '')) {
+        return { status: 'error', message: 'PIN ไม่ถูกต้อง' };
+      }
 
       if (existingLogIdx !== -1) {
         mock_db.logs[existingLogIdx]['เวลาเข้างาน'] = curTime;
@@ -2828,6 +2840,11 @@ async function saveEmployee() {
   const name=document.getElementById('empName').value.trim();
   if(!id){toast('กรุณากรอกรหัสพนักงาน','error');return;}
   if(!name){toast('กรุณากรอกชื่อ-นามสกุล','error');return;}
+  const pinInput = document.getElementById('empPin').value.trim();
+  if (pinInput && !/^\d{4}$/.test(pinInput)) {
+    toast('PIN ต้องเป็นตัวเลข 4 หลักเท่านั้น (หรือเว้นว่างเพื่อสุ่มอัตโนมัติ)','error');
+    return;
+  }
   showLoading('กำลังบันทึกพนักงาน...');
   try {
     const res=await gasRun('addEmployee',{
@@ -2837,14 +2854,21 @@ async function saveEmployee() {
       phone:      document.getElementById('empPhone').value,
       email:      document.getElementById('empEmail').value,
       lineId:     document.getElementById('empLine').value,
-      telegramId: document.getElementById('empTelegram').value
+      telegramId: document.getElementById('empTelegram').value,
+      pin:        pinInput
     });
     hideLoading();
     if(res.status==='success'){
       hideAddEmployeeForm();
-      ['empId','empName','empPosition','empDepartment','empPhone','empEmail','empLine','empTelegram']
+      ['empId','empName','empPosition','empDepartment','empPhone','empEmail','empLine','empTelegram','empPin']
         .forEach(i=>{ const el=document.getElementById(i);if(el)el.value=''; });
-      await swalSuccess('เพิ่มพนักงานสำเร็จ ✅', name);
+      // ⚠️ แสดง PIN ที่ระบบสร้าง/บันทึกไว้ให้แอดมินเห็นทันที เพื่อนำไปแจ้งพนักงาน
+      // (เดิมไม่มีการแสดงผลค่านี้เลย ทำให้พนักงานใหม่ไม่มีทางรู้ PIN ของตัวเอง)
+      await swalSuccess(
+        'เพิ่มพนักงานสำเร็จ ✅',
+        name + '\nรหัสพนักงาน: ' + id + '\nPIN สำหรับเข้างาน: ' + (res.pin || pinInput || '-') +
+        '\n\nกรุณาแจ้ง PIN นี้ให้พนักงานเพื่อใช้ลงชื่อเข้างาน'
+      );
       loadEmployees();
     } else toast('เกิดข้อผิดพลาด: '+(res.message||''),'error');
   } catch(e){ hideLoading(); toast('เกิดข้อผิดพลาด: '+e.message,'error'); }
